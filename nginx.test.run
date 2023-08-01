@@ -1,0 +1,12 @@
+#!/bin/bash
+
+APP_DIR=$(cd `dirname $0` && pwd)
+STORAGE="/tmp/webapp_test"
+PROJECT="webapp-test"
+PORT=9922
+TEST_MODE=true
+
+bash $APP_DIR/bin/nginx.run $APP_DIR $STORAGE $PROJECT $PORT $TEST_MODE
+
+# npm install babel-preset-es2015
+# npx babel-cli /converter/expo/ --out-dir /converter/reslib2015_4 --presets=es2015 --ignore=/converter/expo/html/_js/lib,/converter/reslib/expo/_trash

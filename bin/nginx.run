@@ -1,0 +1,47 @@
+#!/bin/bash
+
+APP_DIR=$1
+STORAGE=$2
+PROJECT=$3
+PORT=$4
+TEST_MODE=$5
+
+rm -rf $STORAGE/$PROJECT/bin
+
+PROJECT_BIN=$STORAGE/$PROJECT/bin
+PROJECT_DATA=$STORAGE/$PROJECT/data
+PROJECT_LOG=$STORAGE/$PROJECT/logs
+
+mkdir -p $PROJECT_BIN
+mkdir -p $PROJECT_DATA
+mkdir -p $PROJECT_LOG
+
+NGINX_CONF=$PROJECT_BIN/nginx.conf
+
+NGINX_CONTAINER_NAME=${PROJECT}-nginx
+
+NETWORK=${PROJECT}-net
+
+cp $APP_DIR/bin/template_nginx.conf $NGINX_CONF
+
+docker network create $NETWORK
+echo "run \
+	--rm=$TEST_MODE \
+	--net $NETWORK \
+	--name $NGINX_CONTAINER_NAME \
+	-p $PORT:80 \
+	-v $NGINX_CONF:/etc/nginx/conf.d/default.conf:ro \
+	-v $APP_DIR/html:/usr/share/nginx/html:ro \
+	-v $PROJECT_LOG:/var/log/nginx \
+	-d nginx"
+docker run \
+	--rm=$TEST_MODE \
+	--net $NETWORK \
+	--name $NGINX_CONTAINER_NAME \
+	-p $PORT:80 \
+	-v $NGINX_CONF:/etc/nginx/conf.d/default.conf:ro \
+	-v $APP_DIR/html:/usr/share/nginx/html:ro \
+	-v $PROJECT_LOG:/var/log/nginx \
+	-d nginx
+
+
