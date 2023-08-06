@@ -29,10 +29,10 @@ QUnit.test("Init app", assert => {
     let newWindow = window.open("/index.html")
     
     newWindow.addEventListener("activityInitActivity", event => {
-        let msg = newWindow.document.getElementById("activityContainer").innerText
+        let msg = newWindow.document.getElementById("testApp").innerText
         assert.equal(msg, "InitActivity.template.html")
-        done()
         newWindow.close()
+        done()
     }, true);
 })
 
@@ -42,15 +42,15 @@ QUnit.test("Switch activity", assert => {
     
     let newWindow = window.open("/index.html")
     
-    newWindow.addEventListener('activityInitActivity', event => {
+    newWindow.addEventListener("activityInitActivity", event => {
         newWindow.document.getElementById("switchToAnotherActivity").click()
     }, true);
     
-    newWindow.addEventListener('activitySwitchActivity', event => {
-        let msg = newWindow.document.getElementById("activityContainer").innerText
+    newWindow.addEventListener("activitySwitchActivity", event => {
+        let msg = newWindow.document.getElementById("testApp").innerText
         assert.equal(msg, "SwitchActivity.template.html")
+        newWindow.close()
         done()
-        //newWindow.close()
     }, true);
 })
 

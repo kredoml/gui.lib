@@ -11,9 +11,9 @@
 	<div id="qunit"></div>
   	<div id="qunit-fixture"></div>
   	<script src="https://code.jquery.com/qunit/qunit-2.19.4.js"></script>
-  	
-  	<script src="/_js/WebApp.js"></script>
-    <script src="/_js/WebAppTest.js"></script>
+  	<!--# config timefmt="%Y%m%d%H%M%S" -->
+  	<script src="/_js/WebApp.js?<!--# echo var='date_local' -->"></script>
+    <script src="/_js/WebAppTest.js?<!--# echo var='date_local' -->"></script>
     
   </body>
 </html>

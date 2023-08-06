@@ -12,7 +12,7 @@ class TestLogger extends ConsoleLogger {
 class TestApplication extends WebApp {
     
     constructor(window, activityContainerId) {
-        super(window, activityContainerId, TestLogger)
+        super(window, activityContainerId, TestLogger, true)
     }
     
     onCreate() {

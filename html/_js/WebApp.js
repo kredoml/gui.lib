@@ -1,147 +1,151 @@
 
 class ConsoleLogger {
-	
-	static info(message) {
-		console.log(message);
-	}
-	
-	static err(error) {
-		console.error(error);
-	}
-}
-
-class System {
-
-	static load(url, callback) {
-		var xhr = new XMLHttpRequest();
-		xhr.open("GET", url);
-		xhr.onload = () => callback(xhr);
-		xhr.send();
-	};
-
-	static globalEval(document, jsText) {
-		var script = document.createElement("script");
-		script.setAttribute("id", "WebAppCode");
-		script.text = jsText;
-		document.getElementsByTagName("head")[0].appendChild(script);
-	}
-	
-	static getClassByName(className) {
-		return Function("return " + className)();
-	}
+	static info(message) { console.log(message) }
+	static err(error) { console.error(error) }
 }
 
 class LocalStorage { 
 	
 	constructor(localStorage, uniq) {
 		try {
-			this.__localStorage = localStorage.localStorage;
-			this.__localStorage.setItem("test", "_");
-			this.__localStorage.removeItem("test");
+			this.__ls = localStorage.localStorage
+			this.__ls.setItem("test", "_")
+			this.__ls.removeItem("test")
 		} catch(e) {
-			this.__localStorage = {};
+			this.__ls = {}
 		}
-		this.__uniq = uniq;
+		this.__uniq = uniq
 	}
 	
-	set(key, value) {
-		this.__localStorage[this.__cnvToAppKey(key)] = value;
-	}
+	get = (key, defaultValue) => this.__appKey(key) in this.__ls ? this.__ls[this.__appKey(key)] : defaultValue
 	
-	get(key, defaultValue) {
-		let result = this.__localStorage[this.__cnvToAppKey(key)];
-		console.log(result)
-        return result == undefined ? defaultValue : result;
-	}
+	set = (key, value) => this.__ls[this.__appKey(key)] = value
 	
-	__cnvToAppKey(key) {
-		return this.__uniq + "." + key
-	}
+	clear = () => this.__ls.clear()
+	
+	__appKey = (key) => this.__uniq + "." + key
 }
 
 class Resource {
-	
 	constructor(url) {
-		this.url = url;
-		this.data = null;
-		this.error = null;
-		this.status = null;
-		this.isEval = this.url.slice(-".js".length) === ".js";
-		this.uniq = "?" + (new Date()).getTime();
-	}
-	
-	setUniq(newUniq) {
-		this.uniq = newUniq;
-	}
-	
-	static load(resource) {
-		return new Promise((resolve, reject) => {
-			System.load(resource.url + resource.uniq, (xhr) => {
-				if (xhr.status === 200) {
-			    	resource.data = xhr.responseText;
-			    	resolve(resource);
-			    } else {
-			    	alert("load: " + xhr);
-			    	resource.error = JSON.stringify(resource);
-			    	resource.status = xhr.status;
-			    	reject(resource);
-			    }
-			});
-		});
+		this.url = url
+		this.type = this.url.split(".").at(-1)
+		this.data = null
+		this.error = null
 	}
 }
 
+class Resources {
+    constructor(localStorage, ...loaders) {
+        this.__state = {}
+        loaders.forEach(cls => this.__state[cls.type] = {loader: new cls(localStorage), items: []})
+    }
+    
+    add(res) { this.__state[res.type].items.push(res) }
+    
+    load(doc) {
+        let loads = []
+        Object.entries(this.__state).forEach(([_, v] = el) => loads.push(...v.loader.load(v.items, doc)))
+        return loads
+    }
+}
+
+class Loader {
+    constructor(storage) {
+        this.__storage = storage
+    }
+    
+    _load(res, callback) {
+        return res.url in this.__storage
+            ? new Promise(resolve => resolve(JSON.parse(this.__storage.get(res.url))))
+            : new Promise((resolve, reject) => {
+                let xhr = new XMLHttpRequest()
+                xhr.open("GET", res.url)
+                let ok = () => {
+                    res.data = xhr.responseText
+                    callback(res)
+                    resolve(res)
+                }
+                let err = () => {
+                    res.error = JSON.stringify(xhr)
+                    reject(res)
+                }
+                xhr.onload = () => xhr.status === 200 ? ok(xhr) : err(xhr)
+                xhr.send()
+            })
+    }
+}
+
+class HtmlLoader extends Loader {
+    static type = "html"
+    
+    load = (resources, doc) => resources.map(res => this._load(res, res => {}))
+}
+
+class JsLoader extends Loader {
+    static type = "js"
+    
+    load = (resources, doc) => resources.map(res => this.eval(doc, res))
+    
+    eval = (doc, res) => this._load(res, res => this.__addScript(doc, script => script.text = res.data))
+    
+    __addScript(document, callback) {
+        let script = document.createElement("script")
+        callback(script)
+        document.body.appendChild(script)
+    }
+}
+
+class JsLoaderDebug extends JsLoader {
+    load = (resources, doc) => resources.map(res => this.import(doc, res))
+    
+    import(doc, res) {
+        return new Promise((resolve, reject) => {
+            this.__addScript(doc, script => {
+                script.setAttribute("src", res.url + "?" + Date.now())
+                script.addEventListener("load", resolve)
+                script.addEventListener("error", reject)
+            })
+        })
+    }
+}
+
 class WebApp {
-	
-	constructor(window, activityContainerId, logger) {
-		this.window = window
-		this.localStorage = new LocalStorage(window, activityContainerId)
-		this.view = new View(window, activityContainerId)
-		this._code = null
-		this.__logger = logger
-		this.__resources = []
+    constructor(window, activityContainerId, logger, debugMode) {
+        this.window = window
+        this.localStorage = new LocalStorage(window, activityContainerId)
+        this.view = new View(window, activityContainerId)
+        this.__logger = logger
+        this.__resources = new Resources(this.localStorage, HtmlLoader, debugMode ? JsLoaderDebug : JsLoader)
 	}
 	
 	onCreate() {}
 	
-	setResources(path) {
-        Array.prototype.slice.call(arguments, 1).map(link => this.__resources.push(new Resource(path + link)))
-    }
+	setResources = (path, ...args) => args.forEach(link => this.__resources.add(new Resource(path + link)))
 	
-	getTemplate(pathToTemplate) {
-		return JSON.parse(this.localStorage.get(pathToTemplate, null)).data; 
-	}
+	getTemplate = (pathToTemplate) => JSON.parse(this.localStorage.get(pathToTemplate, null)).data
 	
-	getLastActivityClass() {
-		return System.getClassByName(this.localStorage.get("currentActivityName"));
-	}
+	getLastActivityClass = () => Function("return " + this.localStorage.get("currentActivityName"))()
 	
 	create(version) {
-		var localStorage = this.localStorage;
-		console.log(this.__resources)
-		Promise.all(this.__resources.map(res => {
-			return version == localStorage.get("version", null) 
-				? new Promise(resolve => resolve(JSON.parse(localStorage.get(res.url))))
-				: Resource.load(res);
-        }))
-		.then(result => {
-			result.map(res => localStorage.set(res.url, JSON.stringify(res)));
-			var jsCode = result.map(resource => resource.isEval ? resource.data : "").join("\n")
-			System.globalEval(this.window.document, jsCode);
-			localStorage.set("version", version);
-			this.onCreate();
-		})
-		.catch(result => this.__logger.err(result + ": " + result.status + ": " + result.error));
-		return this;
+        if(version != this.localStorage.get("version")) this.localStorage.clear()
+        Promise.all(this.__resources.load(this.window.document))
+        .then(result => {
+            result.map(res => this.localStorage.set(res.url, JSON.stringify(res)))
+            this.localStorage.set("version", version)
+            this.onCreate()
+        })
+        .catch(result => this.__logger.err(result + ": " + result.error))
+		return this
 	}
 	
 	initActivity(activityClass, params) {
 		try {
-			this.localStorage.set("currentActivityName", activityClass.name);
-			new activityClass(this).onCreate(params);
-			this.window.dispatchEvent(new Event("activity" + activityClass.name));
+			this.localStorage.set("currentActivityName", activityClass.name)
+			new activityClass(this).onCreate(params)
+			this.window.dispatchEvent(new Event("activity" + activityClass.name))
 		} catch(exc) {
-			this.__logger.err("activityName: " + activityClass.name + "\n" + exc.stack);
+			this.__logger.err("activityName: " + activityClass.name + "\n" + exc.stack)
 		}
 	}
 }
@@ -149,53 +153,35 @@ class WebApp {
 class Activity {
 	
 	constructor(application) {
-		this.app = application;
+		this.app = application
 	}
 	
 	onCreate() {}
 	
-	switchActivity(activityClass, params) {
-		this.app.initActivity(activityClass, params);
-	}
+	switchActivity(activityClass, params) { this.app.initActivity(activityClass, params) }
 }
 
 class View {
 	
 	constructor(window, contentId) {
-		this.__window = window;
-		this.__content = this.findElement(contentId);
+		this.__window = window
+		this.__content = this.findElement(contentId)
 	}
 	
-	appendContent(html) {
-		this.__content.innerHTML += html;
-	}
+	appendContent(html) { this.__content.innerHTML += html }
 	
-	setContent(html) {
-		this.__content.innerHTML = html;
-	}
+	setContent(html) { this.__content.innerHTML = html }
 	
-	appendElement(id, html) {
-		this.findElement(id).innerHTML += html;
-	}
+	appendElement(id, html) { this.findElement(id).innerHTML += html }
 	
-	setElement(id, html) {
-		this.findElement(id).innerHTML = html;
-	}
+	setElement(id, html) { this.findElement(id).innerHTML = html }
 	
-	findElement(id) {
-		return this.__window.document.getElementById(id);
-	}
+	findElement(id) { return this.__window.document.getElementById(id) }
 	
-	hideElement(id) {
-		this.findElement(id).style.display = "none";
-	}
+	hideElement(id) { this.findElement(id).style.display = "none" }
 	
-	showElement(id) {
-		this.findElement(id).style.display = "block";
-	}
+	showElement(id) { this.findElement(id).style.display = "block" }
 	
-	formatElement(id, params) {
-		return this.findElement(id).innerHTML.replace(/{(\w*)}/g, (m, key) => params[key]);
-	}
+	formatElement(id, params) { return this.findElement(id).innerHTML.replace(/{(\w*)}/g, (_, key) => params[key]) }
 }
 
