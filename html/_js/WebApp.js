@@ -21,6 +21,10 @@ class LocalStorage {
 	
 	set = (key, value) => this.__ls[this.__appKey(key)] = value
 	
+	setObj = (key, obj) => this.set(key, JSON.stringify(obj))
+	
+	getObj = (key, defaultValue) => this.__appKey(key) in this.__ls ? JSON.parse(this.__ls[this.__appKey(key)]) : defaultValue 
+	
 	clear = () => this.__ls.clear()
 	
 	__appKey = (key) => this.__uniq + "." + key
@@ -123,7 +127,7 @@ class WebApp {
 	
 	setResources = (path, ...args) => args.forEach(link => this.__resources.add(new Resource(path + link)))
 	
-	getTemplate = (pathToTemplate) => JSON.parse(this.localStorage.get(pathToTemplate, null)).data
+	getTemplate = (pathToTemplate) => this.localStorage.getObj(pathToTemplate, null).data
 	
 	getLastActivityClass = () => Function("return " + this.localStorage.get("currentActivityName"))()
 	
@@ -131,7 +135,7 @@ class WebApp {
         if(version != this.localStorage.get("version")) this.localStorage.clear()
         Promise.all(this.__resources.load(this.window.document))
         .then(result => {
-            result.map(res => this.localStorage.set(res.url, JSON.stringify(res)))
+            result.map(res => this.localStorage.setObj(res.url, res))
             this.localStorage.set("version", version)
             this.onCreate()
         })
