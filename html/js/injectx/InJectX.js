@@ -1,7 +1,7 @@
 
 window.onload = () => Suite.fromUrl(window.document.URL, new TestEnv(window)).run()
 
-runTest = (suiteScript, testName, callback) => Suite.runTest(suiteScript, testName, callback)
+runInjectedTest = (suiteScript, testName, callback) => Suite.runInjectedTest(suiteScript, testName, callback)
 
 class InJectXError extends Error {
     constructor(message) {
@@ -10,74 +10,26 @@ class InJectXError extends Error {
     }
 }
 
-class Test {
-    constructor(name, body) {
-        this.name = name
-        this.body = body
-    }
-    
-    run = (suite) => this.exec((result, error) => suite.testEnv.setResult(this.name, result, error))
-    
-    async exec(callback) {
-        let assert = new Assert()
-        try {
-            this.body(assert)
-            await assert._wait()
-            callback(true, "")
-        } catch (err) {
-            console.log(err)
-            callback(false, err.stack)
-        }
-    }
-}
 
-class Unit extends Test {
-    constructor(name, body) {
-        super(name, body)
-    }
-    
-    static test = (name, body) => new Unit(name, body)
-}
-
-class Integration extends Test {
-    constructor(name, url, body) {
-        super(name, body)
-        this.__url = url
-    }
-    
-    static test = (name, url, body) => new Integration(name, url, body)
-    
-    run(suite) {
-        let wndw = window.open(this.__url + "#InJectX")
-        wndw.addEventListener("load", () => {
-            Utils.injectScript(wndw, suite.testEnv.libInJectX(),
-                (ok) => {
-                    wndw.runTest(suite.suiteScript, this.name, (result, error) => {
-                        wndw.document.title = wndw.document.title + " [" + this.name + "]"
-                        if(result) wndw.close()
-                        suite.testEnv.setResult(this.name, result, error)
-                    })
-                },
-                (err) => {
-                    console.log(err)
-                }
-            )
-        }, false)
+class AssertionError extends Error {
+    constructor(message) {
+        super(message);
+        this.name = this.constructor.name;
     }
 }
 
 class InJectX {
     static __storage = {}
-    static add = (testObj) => InJectX.__storage[testObj.name] = testObj
-    static getTests = (testNames) => {
+    static add(testObj) { InJectX.__storage[testObj.name] = testObj }
+    static getTests(testNames) {
         return testNames.length == 0
             ? Object.values(InJectX.__storage)
             : testNames.map(name =>  InJectX.__storage[name])
     }
-    static getTest = (testName) => InJectX.__storage[testName]
+    static getTest(testName) { return InJectX.__storage[testName] }
 }
 
-class Suite {
+class Suite {runTest
     constructor(suiteScript, testNames, testEnv) {
         this.suiteScript = suiteScript
         this.testNames = testNames
@@ -85,15 +37,16 @@ class Suite {
     }
     
     run() {
+        let setResult = (name, res, err) => this.testEnv.setResult(name, res, err)
         Utils.injectScript(window, this.suiteScript,
-            ok  => InJectX.getTests(this.testNames).map(testObj => testObj.run(this)),
+            ok  => InJectX.getTests(this.testNames).map(test => test.run(setResult, this.suiteScript)),
             err => { throw new InJectXError(`Can't import ${this.suiteScript}`) }
         )
     }
     
-    static runTest(suiteScript, testName, callback) {
+    static runInjectedTest(suiteScript, testName, callback) {
         Utils.injectScript(window, suiteScript,
-            (ok) => InJectX.getTest(testName).exec(callback),
+            (ok) => InJectX.getTest(testName).runInjectedTest(callback),
             (err) => callback(false, err)
         )
     }
@@ -111,7 +64,7 @@ class Suite {
 }
 
 class StubSuite extends Suite {
-    run = () => {}
+    run() {}
 }
 
 class TestEnv {
@@ -120,9 +73,9 @@ class TestEnv {
         this.__wndw = wndw
     }
     
-    resultContainer = () => window.document.getElementById("InJectXResults")
+    resultContainer() { return window.document.getElementById("InJectXResults") }
     
-    libInJectX = () => Utils.getScriptPathByName(this.__wndw, "InJectX.js")
+    libInJectX() { return Utils.getScriptPathByName(this.__wndw, "InJectX.js") }
     
     setResult(name, result, error) {
         if(!result) this.__wndw.document.title = "ERRORS!"
@@ -155,82 +108,163 @@ class Utils {
 
 }
 
-class AssertionError extends Error {
-    constructor(message) {
-        super(message);
-        this.name = this.constructor.name;
+class Test {
+    constructor(name, body) {
+        this.name = name
+        this.body = body
     }
 }
 
-class Async {
-    constructor(countOfWaitedCalls) {
-        this.__count = countOfWaitedCalls == undefined ? 1 : countOfWaitedCalls
-        this.__called = 0
-        this.__resolve = () => {}
-        this.__reject = () => {}
-        this.__promise = null
+class Unit extends Test {
+    constructor(name, body) {
+        super(name, body)
     }
     
-    run(delay) {
-        this.__promise = new Promise((resolve, reject) => {
-            this.__resolve = resolve
-            this.__reject = reject
-            setTimeout(() => resolve(), delay)
-        })
-        return () => { this.done() }
-    }
+    static test(name, body) { return new Unit(name, body) }
     
-    done() {
-        this.__called += 1
-        if(this.__called >= this.__count) this.__resolve()
-    }
-    
-    fail(err) {
-        this.__reject(err)
-    }
-    
-    async check() {
-        if(this.__promise != null) await this.__promise
-        if(this.__called < this.__count) throw new AssertionError(`Expected ${this.__count} calls but found only ${this.__called}`)
+    run(callback) {
+        console.log("UNIT run", this.name)
+        try {
+            let assert = new Assert()
+            this.body(assert)
+            assert._checkAsserts()
+            callback(this.name, true, "")
+        } catch (err) {
+            callback(this.name, false, err.stack)
+        }
     }
 }
 
-class StubAsync {
-    check() {}
+class AsyncUnit extends Unit {
+    constructor(name, body) {
+        super(name, body)
+    }
+    
+    static test(name, body) { return new AsyncUnit(name, body) }
+    
+    async run(callback) {
+        console.log("ASYNC UNIT run 1", this.name)
+        console.log(callback)
+        let assert = new AsyncAssert()
+        try {
+            this.body(assert)
+            console.log("ASYNC UNIT run 2")
+            await assert._wait()
+            console.log("ASYNC UNIT run 3")
+            assert._checkAsserts()
+            console.log("ASYNC UNIT run 4")
+            assert._checkComplete()
+            console.log("ASYNC UNIT run 5")
+            callback(this.name, true, "")
+        } catch (err) {
+            console.log("ASYNC UNIT err 1")
+            callback(this.name, false, err.stack)
+            console.log("ASYNC UNIT err 2")
+        }
+    }
+}
+
+class Integration extends AsyncUnit {
+    constructor(name, url, body) {
+        super(name, body)
+        this.__url = url
+    }
+    
+    static test(name, url, body) { return new Integration(name, url, body) }
+    
+    run(callback, suiteScript) {
+        console.log("INTEGRATION UNIT run 1", this.name)
+        let wndw = window.open(this.__url + "#InJectX")
+        wndw.addEventListener("load", () => {
+            Utils.injectScript(wndw, new TestEnv(window).libInJectX(),
+                (ok) => {
+                    wndw.runInjectedTest(suiteScript, this.name, (name, result, error) => {
+                        wndw.document.title = wndw.document.title + " [" + this.name + "]"
+                        if(result) wndw.close()
+                        callback(name, result, error)
+                    })
+                },
+                (err) => {
+                    console.log(err)
+                }
+            )
+        }, false)
+    }
+    
+    runInjectedTest(callback) {
+        super.run(callback)
+    }
 }
 
 class Assert {
     constructor() {
-        this.__delay = 0
-        this.__async = new StubAsync()
+        this._assertCount = 0
     }
     
-    equals(actual, expected) { if(actual.toString() !== expected.toString()) this.__msg(actual, expected) }
+    equals(actual, expected) { this.__assertion(actual.toString() !== expected.toString(), actual, expected) }
     
-    false(param) { if(param) this.__msg(param, false) }
+    false(param) { this.__assertion(param, param, false) }
     
-    true(param) { if(!param) this.__msg(param, true) }
+    true(param) { this.__assertion(!param, param, true) }
     
-    fail(msg) { this.__err(msg) }
+    fail(msg) { this._err(msg) }
     
-    timeout = (delay) => this.__delay = delay
+    ok() { this.true(true) }
     
-    async = (count) => {
-        this.__async = new Async(count)
-        return this.__async.run(this.__delay)
+    __assertion(fail, actual, expected) {
+        if(fail) {
+            this.__msg(actual, expected)
+        } else {
+            this._assertCount += 1
+        }
     }
     
-    _wait = () => this.__async.check()
+    __msg(actual, expected) { this._err(`expected [${expected}] but found [${actual}]`) }
     
-    __msg = (actual, expected) => this.__err(`expected [${expected}] but found [${actual}]`)
+    _err(msg) { throw new AssertionError(msg) }
     
-    __err = (msg) => {
-        this.__async.fail(new AssertionError(msg))
-        throw new AssertionError(msg)
-    }
+    _checkAsserts() { if(this._assertCount == 0) this._err("No assert was called") }
 }
 
-
-
-
-
+class AsyncAssert extends Assert {
+    
+    constructor() {
+        super()
+        this.__delay = 0
+        this.__numberOfCompleted = 0
+        this.__reallyCompleted = 0
+        this.__resolve = () => {}
+        this.__reject = () => {}
+    }
+    
+    timeout(delay) { this.__delay = delay }
+    
+    numberOfCompleted(number) {
+        this.__numberOfCompleted = number
+        this.__promise = new Promise((resolve, reject) => {
+            this.__resolve = resolve
+            this.__reject = reject
+            setTimeout(() => resolve(), this.__delay)
+        })
+    }
+    
+    complete() {
+        this.ok()
+        this.__reallyCompleted += 1
+        if(this.__numberOfCompleted == this.__reallyCompleted) this.__resolve()
+    }
+    
+    _wait() { return this.__promise }
+    
+    _checkComplete() {
+        if(this.__numberOfCompleted > this.__reallyCompleted) {
+            this._err(`Expected ${this.__numberOfCompleted} calls "complete" but found only ${this.__reallyCompleted}`)
+        }
+    }
+    
+    _err(msg) {
+        let err = new AssertionError(msg)
+        this.__reject(err)
+        throw err
+    }
+}

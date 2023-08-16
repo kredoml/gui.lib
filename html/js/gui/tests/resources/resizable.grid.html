@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="ru">
+    <head>
+        <meta charset="utf-8">
+        <title></title>
+    </head>
+
+    <body>
+        <script src="/js/gui/ResizableGrid.js"></script>
+        <script>
+        window.onload = () => new ResizableGrid(window.document, "editorGrid", () => {})
+        </script>
+    
+	    <style>
+	        html,
+	            body {
+	                padding: 0px;
+	                margin: 0px;
+	                width: 100%;
+	                height: 100%;
+	                -webkit-touch-callout: none;
+	                -webkit-user-select: none;
+	                -khtml-user-select: none;
+	                -moz-user-select: none;
+	                -ms-user-select: none;
+	                user-select: none;
+	                font-family: system-ui,sans-serif;
+	            }
+	        .ui-vertical-resizable-container {
+	            display: flex;
+	            width: 100%;
+	            height: 100%;
+	        }
+	        .ui-horizontal-resizable-container {
+	            flex-direction: column;
+	            display: flex;
+	            width: 100%;
+	            height: 100%;
+	        }
+	        .ui-vertical-resizer {
+	            background-color: #cbd5e0;
+	            cursor: ew-resize;
+	            height: 100%;
+	            width: 10px;
+	        }
+	        .ui-horizontal-resizer {
+	            background-color: #cbd5e0;
+	            cursor: ns-resize;
+	            width: 100%;
+	            height: 10px;
+	        }
+	        .ui-resizable-block {
+	            align-items: center;
+	            display: flex;
+	            justify-content: center;
+	            width: 100%;
+	            height: 100%;
+	        }
+	    </style>
+	    
+	    <div id="editorGrid" class="ui-vertical-resizable-container">
+	        <div class="ui-resizable-block" style="width: 25%;">left</div>
+	        <div class="ui-vertical-resizer" id="resizer1"></div>
+	        <div class="ui-resizable-block" style="flex: 1;">
+	            <div class="ui-resizable-block" style="width: 70%;">
+	                <div class="ui-horizontal-resizable-container">
+	                    <div class="ui-resizable-block" style="height: 75%;">top</div>
+	                    <div class="ui-horizontal-resizer"></div>
+	                    <div class="ui-resizable-block" style="flex: 1;">bottom</div>
+	                </div>
+	            </div>
+	            <div class="ui-vertical-resizer" id="dd1"></div>
+	            <div class="ui-resizable-block" style="flex: 1;">right</div>
+	        </div>
+	    </div>
+    </body>
+</html>
