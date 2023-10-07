@@ -1,5 +1,5 @@
 
-window.onload = () => Suite.fromUrl(window.document.URL, new TestEnv(window)).run()
+window.onload = () => Suite.fromUrl(window.document.URL, new ResultsForm(window)).run()
 
 runInjectedTest = (suiteScript, testName, callback) => Suite.runInjectedTest(suiteScript, testName, callback)
 
@@ -10,7 +10,6 @@ class InJectXError extends Error {
     }
 }
 
-
 class AssertionError extends Error {
     constructor(message) {
         super(message);
@@ -20,46 +19,65 @@ class AssertionError extends Error {
 
 class InJectX {
     static __storage = {}
-    static add(testObj) { InJectX.__storage[testObj.name] = testObj }
-    static getTests(testNames) {
-        return testNames.length == 0
-            ? Object.values(InJectX.__storage)
-            : testNames.map(name =>  InJectX.__storage[name])
+    static __imports = []
+    static add(testObj) {
+        let script = Utils.getCallerFile()
+        if(!(script in InJectX.__storage)) InJectX.__storage[script] = {}
+        InJectX.__storage[script][testObj.name] = testObj
     }
-    static getTest(testName) { return InJectX.__storage[testName] }
+    static getTests(script, testNames) {
+        return testNames.length == 0
+            ? Object.values(InJectX.__storage[script])
+            : testNames.map(name =>  InJectX.__storage[script][name])
+    }
+    static getTest(script, testName) { return InJectX.__storage[script][testName] }
+    static import(mod) { InJectX.__imports.push(mod) }
+    static getImports() { return InJectX.__imports }
 }
 
-class Suite {runTest
-    constructor(suiteScript, testNames, testEnv) {
-        this.suiteScript = suiteScript
-        this.testNames = testNames
-        this.testEnv = testEnv
+class Suite {
+    constructor(items, resultForm) {
+        this.items = items
+        this.resultForm = resultForm
     }
     
     run() {
-        let setResult = (name, res, err) => this.testEnv.setResult(name, res, err)
-        Utils.injectScript(window, this.suiteScript,
-            ok  => InJectX.getTests(this.testNames).map(test => test.run(setResult, this.suiteScript)),
-            err => { throw new InJectXError(`Can't import ${this.suiteScript}`) }
-        )
+        this.items.forEach(item => {
+            let script = item.script
+            let testNames = item.testNames
+            this.resultForm.addSuite(script)
+            Utils.injectScript(window, script,
+                ok  => {
+                    let setResult = (name, res, err) => this.resultForm.setResult(script, name, res, err)
+                    InJectX.getTests(script, testNames).map(test => test.run(setResult, script))
+                },
+                err => {
+                    const errMsg = `Can't import ${script}`
+                    this.resultForm.setResult(script, "exception", false, errMsg)
+                    throw new InJectXError(errMsg)
+                }
+            )
+        })
     }
     
     static runInjectedTest(suiteScript, testName, callback) {
         Utils.injectScript(window, suiteScript,
-            (ok) => InJectX.getTest(testName).runInjectedTest(callback),
-            (err) => callback(false, err)
+            ok => InJectX.getTest(suiteScript, testName).runInjectedTest(callback),
+            err => callback(false, err)
         )
     }
     
-    static fromUrl(url, testEnv) {
+    static fromUrl(url, resultForm) {
+        let items = []
         let urlParts = url.split("#")
         if(urlParts.length < 2) throw new InJectXError(`Can't find any params in ${url}`)
         let anchor = urlParts[1]
         if(anchor === "InJectX") return new StubSuite()
-        let params = anchor.split(":");
-        let suiteScript = params[0]
-        let testNames = params.length == 2 ? params[1].split(",") : []
-        return new Suite(suiteScript, testNames, testEnv)
+        anchor.split(";").forEach(item => {
+            let params = item.split(":");
+            items.push({script: params[0], testNames: params.length == 2 ? params[1].split(",") : []})
+        })
+        return new Suite(items, resultForm)
     }
 }
 
@@ -67,23 +85,33 @@ class StubSuite extends Suite {
     run() {}
 }
 
-class TestEnv {
-    
+class ResultsForm {
+  
+    static __form = '<details id="{suite}" close><summary><span id="{suite}.res">OK</span> | {suite}</summary><pre id="{suite}.InJectX_ERR" style="color: red;"></pre>\
+            <pre id="{suite}.InJectX_OK" style="color: green;"></pre></details>';
+        
     constructor(wndw) {
         this.__wndw = wndw
     }
     
-    resultContainer() { return window.document.getElementById("InJectXResults") }
-    
-    libInJectX() { return Utils.getScriptPathByName(this.__wndw, "InJectX.js") }
-    
-    setResult(name, result, error) {
-        if(!result) this.__wndw.document.title = "ERRORS!"
-        this.resultContainer().innerText += (result ? "OK" : "ERROR") + "\t" + name + "\t" + error + "\n"
+    addSuite(suite) {
+        this.__wndw.document.getElementById("InJectXResults").innerHTML += ResultsForm.__form.replaceAll('{suite}', suite)
     }
     
-    checkEnv() {
-        if(this.resultContainer() === null) throw new InJectXError(`Can't find result block id "InJectXResults"`)
+    ok(suite, name) {
+        this.__wndw.document.getElementById(suite + ".InJectX_OK").innerHTML += "OK\t" + name + "\n"
+    }
+    
+    err(suite, name, error) {
+        const errLink = '<a target=”_blank” href="' + new URL(this.__wndw.document.URL).pathname + "#" + suite + ":" + name + '">' + name + '</a>'
+        this.__wndw.document.getElementById(suite + ".InJectX_ERR").innerHTML += "ERROR\t" + errLink + "\t" + error + "\n"
+        this.__wndw.document.getElementById(suite).open = true
+        this.__wndw.document.getElementById(suite +".res").innerHTML = "ERROR"
+    }
+    
+    setResult(suite, test, result, error) {
+        if(!result) this.__wndw.document.title = "ERRORS!"
+        result ? this.ok(suite, test) : this.err(suite, test, error)
     }
 }
 
@@ -92,8 +120,8 @@ class Utils {
     static getScriptPathByName(wndw, scriptName) {
         let allFoundScripts = []
         for(let el of Array.from(wndw.document.getElementsByTagName("script"))) {
-            if(el.src.endsWith(scriptName)) return el.src
-            allFoundScripts.push(el)
+            if(el.src.indexOf(scriptName) >= 0) return el.src.split("?")[0]
+            allFoundScripts.push(el.src)
         }
         throw new InJectXError(`Can't found script ${scriptName} in ${allFoundScripts}`)
     }
@@ -104,6 +132,23 @@ class Utils {
         script.addEventListener("load", onLoad)
         script.addEventListener("error", onError)
         wndw.document.body.appendChild(script)
+    }
+    
+    static getCallerFile() {
+        var originalFunc = Error.prepareStackTrace;
+        var callerfile;
+        try {
+            var err = new Error();
+            var currentfile;
+            Error.prepareStackTrace = function (err, stack) { return stack; };
+            currentfile = err.stack.shift().getFileName();
+            while (err.stack.length) {
+                callerfile = err.stack.shift().getFileName();
+                if(currentfile !== callerfile) break;
+            }
+        } catch (e) {}
+        Error.prepareStackTrace = originalFunc; 
+        return new URL(callerfile).pathname;
     }
 
 }
@@ -122,11 +167,10 @@ class Unit extends Test {
     
     static test(name, body) { return new Unit(name, body) }
     
-    run(callback) {
-        console.log("UNIT run", this.name)
+    async run(callback) {
         try {
             let assert = new Assert()
-            this.body(assert)
+            await this.body(assert)
             assert._checkAsserts()
             callback(this.name, true, "")
         } catch (err) {
@@ -135,36 +179,7 @@ class Unit extends Test {
     }
 }
 
-class AsyncUnit extends Unit {
-    constructor(name, body) {
-        super(name, body)
-    }
-    
-    static test(name, body) { return new AsyncUnit(name, body) }
-    
-    async run(callback) {
-        console.log("ASYNC UNIT run 1", this.name)
-        console.log(callback)
-        let assert = new AsyncAssert()
-        try {
-            this.body(assert)
-            console.log("ASYNC UNIT run 2")
-            await assert._wait()
-            console.log("ASYNC UNIT run 3")
-            assert._checkAsserts()
-            console.log("ASYNC UNIT run 4")
-            assert._checkComplete()
-            console.log("ASYNC UNIT run 5")
-            callback(this.name, true, "")
-        } catch (err) {
-            console.log("ASYNC UNIT err 1")
-            callback(this.name, false, err.stack)
-            console.log("ASYNC UNIT err 2")
-        }
-    }
-}
-
-class Integration extends AsyncUnit {
+class Integration extends Unit {
     constructor(name, url, body) {
         super(name, body)
         this.__url = url
@@ -173,10 +188,9 @@ class Integration extends AsyncUnit {
     static test(name, url, body) { return new Integration(name, url, body) }
     
     run(callback, suiteScript) {
-        console.log("INTEGRATION UNIT run 1", this.name)
         let wndw = window.open(this.__url + "#InJectX")
         wndw.addEventListener("load", () => {
-            Utils.injectScript(wndw, new TestEnv(window).libInJectX(),
+            Utils.injectScript(wndw, Utils.getScriptPathByName(window, "InJectX.js"),
                 (ok) => {
                     wndw.runInjectedTest(suiteScript, this.name, (name, result, error) => {
                         wndw.document.title = wndw.document.title + " [" + this.name + "]"
@@ -203,6 +217,8 @@ class Assert {
     
     equals(actual, expected) { this.__assertion(actual.toString() !== expected.toString(), actual, expected) }
     
+    notEquals(actual, expected) { this.__assertion(actual.toString() === expected.toString(), actual, expected) }
+    
     false(param) { this.__assertion(param, param, false) }
     
     true(param) { this.__assertion(!param, param, true) }
@@ -224,6 +240,148 @@ class Assert {
     _err(msg) { throw new AssertionError(msg) }
     
     _checkAsserts() { if(this._assertCount == 0) this._err("No assert was called") }
+    
+    calls(count, timeout) {
+        return new Calls(count, timeout)
+    }
+    
+    all(calls) {
+        this.ok()
+        return calls.forAllEvents()
+    }
+}
+
+class Calls {
+    constructor(count, timeout) {
+        this.__numberOfCompleted = count
+        this.__reallyCompleted = 0
+        this.__resolve = null
+        this.__reject = null
+        this.__timeoutId = null
+        this.__promise = new Promise((resolve, reject) => {
+            this.__resolve = resolve
+            this.__reject = reject
+            this.__timeoutId = setTimeout(() => this.__err(), timeout)
+        })
+    }
+    
+    __end() {
+        clearTimeout(this.__timeoutId)
+        this.__resolve()
+    }
+    
+    __err() {
+        let msg = `Expected ${this.__numberOfCompleted} calls "plusOne" but found only ${this.__reallyCompleted}`
+        this.__reject(new AssertionError(msg))
+    }
+    
+    plusOne() {
+        this.__reallyCompleted += 1
+        if(this.__reallyCompleted == this.__numberOfCompleted) this.__end()
+    }
+    
+    forAllEvents() {
+        return this.__promise
+    }
+}
+
+class Position {
+    constructor(x, y) {
+        this.x = x
+        this.y = y
+    }
+    
+    x(x) { 
+        this.x = x
+        return this
+    }
+    
+    y(y) {
+        this.y = y
+        return this
+    }
+    
+    left(x) {
+        this.x -= x
+        return this
+    }
+    right(x) {
+        this.x += x
+        return this
+    }
+    top(y) {
+        this.y -= y
+        return this
+    }
+    bottom(y) {
+        this.y += y
+        return this
+    }
+    
+    clone() {
+        return new Position(this.x, this.y)
+    }
+}
+class Mouse {
+    
+    constructor(element) {
+        this.__el = element
+        let rect = this.__el.getBoundingClientRect()
+        this.__pos = new Position((rect.left + rect.right)/2, (rect.top + rect.bottom)/2)
+    }
+    
+    downLeftButton() {
+        this.__dispatch("mousedown")
+    }
+    
+    upLeftButton() {
+        this.__dispatch("mouseup")
+    }
+    
+    moveTo(position) {
+        this.__pos = position
+        this.__dispatch("mousemove")
+    }
+    
+    cursorPosition() {
+        return this.__pos.clone()
+    }
+    
+    __dispatch(type) {
+        this.__el.dispatchEvent(new MouseEvent(type, {
+            'bubbles': true,
+            'cancelable': true,
+            'clientX': this.__pos.x,
+            'clientY': this.__pos.y}))
+    }
+    
+    click() {
+        this.__el.click()
+    }
+}
+
+
+/*
+
+class AsyncUnit extends Unit {
+    constructor(name, body) {
+        super(name, body)
+    }
+    
+    static test(name, body) { return new AsyncUnit(name, body) }
+    
+    async run(callback) {
+        let assert = new AsyncAssert()
+        try {
+            await this.body(assert)
+            await assert._wait()
+            assert._checkAsserts()
+            assert._checkComplete()
+            callback(this.name, true, "")
+        } catch (err) {
+            callback(this.name, false, err.stack)
+        }
+    }
 }
 
 class AsyncAssert extends Assert {
@@ -268,3 +426,6 @@ class AsyncAssert extends Assert {
         throw err
     }
 }
+
+*/
+

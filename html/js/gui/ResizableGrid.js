@@ -50,25 +50,42 @@
 </div>
 
 <script>
-    new ResizableGrid("mainGrid")
-    new VerticalResizer(window.document, "leftResizer")
-    new VerticalResizer(window.document, "rightResizer")
-    new HorizontalResizer(window.document, "middleResizer")
+    new ResizableGrid(document, "mainGrid", new UIState({}))
 </script>
 
 */
 
-class MousePointer {
-    constructor(event) {
-        this.event = event
+class ResizableGrid {
+    constructor(doc, id, state) {
+        this.__id = id
+        this.__state = state
+        this.grid = doc.getElementById(id)
+        this.__getEls("ui-vertical-resizer").forEach(el => new VerticalResizer(doc, el, this.__onResizeBlocks))
+        this.__getEls("ui-horizontal-resizer").forEach(el => new HorizontalResizer(doc, el, this.__onResizeBlocks))
+        this.__setState(this.__state.get(this.__id).get('sizes', []))
     }
-    x = () => this.event.clientX
-    y = () => this.event.clientY
+    
+    __setState(state) {
+        if(state.length == 0) return
+        this.__getAllBlocks().forEach((el, i) => {
+            el.style["width"] = state[i].w
+            el.style["height"] = state[i].h
+        })
+    }
+    
+    __getEls = (cls) => Array.from(this.grid.getElementsByClassName(cls))
+    
+    __onResizeBlocks = () => {
+        let currentState = this.__getAllBlocks().map(el => ({w: el.style["width"], h: el.style["height"]}))
+        this.__state.set(this.__id, 'sizes', currentState)
+    }
+    
+    __getAllBlocks = () => this.__getEls("ui-resizable-block")
 }
 
 class Resizer {
-    constructor(doc, resizer, onResize) {
-        this.onResize = onResize
+    constructor(doc, resizer, onChange) {
+        this.onResize = onChange
         this.doc = doc
         this.resizer = resizer
         this.resizableSide = this.resizer.previousElementSibling
@@ -79,7 +96,6 @@ class Resizer {
     }
     
     mouseDownHandler = (event) => {
-        console.log("mouseDownHandler" + event.clientX + " : " + event.clientY)
         this.coord = event[this._getAxis()]
         this.resizableSize = this.resizableSide.getBoundingClientRect()[this._getDimension()]
         this.doc.addEventListener("mousemove", this.mouseMoveHandler)
@@ -87,7 +103,6 @@ class Resizer {
     }
     
     mouseMoveHandler = (event) => {
-        //console.log(event[this._getAxis()])
         const dCoord = event[this._getAxis()] - this.coord
         const size = ((this.resizableSize + dCoord) * 100) / this.resizer.parentNode.getBoundingClientRect()[this._getDimension()]
         this.resizableSide.style[this._getDimension()] = `${size}%`
@@ -97,7 +112,6 @@ class Resizer {
     }
 
     mouseUpHandler = (event) => {
-        console.log("mouseUpHandler" + event.clientX + " : " + event.clientY)
         this.__removeProp("cursor", this.resizer, this.doc.body)
         this.__removeProp("user-select", this.resizableSide, this.restSide)
         this.__removeProp("pointer-events", this.resizableSide, this.restSide)
@@ -106,37 +120,19 @@ class Resizer {
         this.onResize()
     }
     
-    __addProp = (name, value, ...els) => els.forEach(el => el.style[name] = value)
-    __removeProp = (name, ...els) => els.forEach(el => el.style.removeProperty(name))
+    __addProp(name, value, ...els) { els.forEach(el => el.style[name] = value) }
+    __removeProp(name, ...els) { els.forEach(el => el.style.removeProperty(name)) }
 }
 
 class HorizontalResizer extends Resizer {
-    _getDimension = () => "height"
-    _getAxis = () => "clientY"
+    _getDimension() { return "height" }
+    _getAxis() { return "clientY" }
 }
 
 class VerticalResizer extends Resizer {
-    _getDimension = () => "width"
-    _getAxis = () => "clientX"
+    _getDimension() { return "width" }
+    _getAxis() { return "clientX" }
 }
 
-class ResizableGrid {
-    constructor(doc, gridId, onResize) {
-        this.onResize = onResize
-        this.grid = doc.getElementById(gridId)
-        this.__getEls("ui-vertical-resizer").forEach(el => new VerticalResizer(window.document, el, this.__onResizeBlocks))
-        this.__getEls("ui-horizontal-resizer").forEach(el => new HorizontalResizer(window.document, el, this.__onResizeBlocks))
-    }
-    
-    setState = (state) => this.__getAllBlocks().forEach((el, i) => {
-        el.style["width"] = state[i].w
-        el.style["height"] = state[i].h
-    })
-    
-    __getEls = (cls) => Array.from(this.grid.getElementsByClassName(cls))
-    
-    __onResizeBlocks = () => this.onResize(this.__getAllBlocks().map(el => ({w: el.style["width"], h: el.style["height"]})))
-    
-    __getAllBlocks = () => this.__getEls("ui-resizable-block")
-}
+
 

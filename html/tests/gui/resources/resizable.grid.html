@@ -6,10 +6,9 @@
     </head>
 
     <body>
-        <script src="/js/gui/ResizableGrid.js"></script>
-        <script>
-        window.onload = () => new ResizableGrid(window.document, "editorGrid", () => {})
-        </script>
+        <!--# config timefmt="%Y%m%d%H%M%S" -->
+        <script src="/js/gui/ResizableGrid.js?<!--# echo var='date_local' -->"></script>
+        <script src="/js/gui/UIState.js?<!--# echo var='date_local' -->"></script>
     
 	    <style>
 	        html,
@@ -58,20 +57,26 @@
 	        }
 	    </style>
 	    
-	    <div id="editorGrid" class="ui-vertical-resizable-container">
-	        <div class="ui-resizable-block" style="width: 25%;">left</div>
-	        <div class="ui-vertical-resizer" id="resizer1"></div>
-	        <div class="ui-resizable-block" style="flex: 1;">
-	            <div class="ui-resizable-block" style="width: 70%;">
-	                <div class="ui-horizontal-resizable-container">
-	                    <div class="ui-resizable-block" style="height: 75%;">top</div>
-	                    <div class="ui-horizontal-resizer"></div>
-	                    <div class="ui-resizable-block" style="flex: 1;">bottom</div>
-	                </div>
-	            </div>
-	            <div class="ui-vertical-resizer" id="dd1"></div>
-	            <div class="ui-resizable-block" style="flex: 1;">right</div>
-	        </div>
+	    <div id="test"  style="width: 100%;height: 100%;">
+		    
 	    </div>
+	    
+	    <div id="stub" style="display: none;">
+            <div id="$editorGrid" class="ui-vertical-resizable-container">
+                <div class="ui-resizable-block" style="width: 25%;">left</div>
+                <div class="ui-vertical-resizer" id="$verticalResizerLeft"></div>
+                <div class="ui-resizable-block" style="flex: 1;">
+                    <div class="ui-resizable-block" style="width: 70%;">
+                        <div class="ui-horizontal-resizable-container">
+                            <div class="ui-resizable-block" style="height: 75%;">top</div>
+                            <div class="ui-horizontal-resizer" id="$horizontalResizer"></div>
+                            <div class="ui-resizable-block" style="flex: 1;">bottom</div>
+                        </div>
+                    </div>
+                    <div class="ui-vertical-resizer" id="$verticalResizerRight"></div>
+                    <div class="ui-resizable-block" style="flex: 1;">right</div>
+                </div>
+            </div>
+        </div>
     </body>
 </html>

@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="ru">
+    <head>
+        <meta charset="utf-8">
+        <title></title>
+    </head>
+
+    <body>
+        <style>
+            body {
+                font-family: Inter,BlinkMacSystemFont,Segoe UI,Roboto,Oxygen,Ubuntu,Cantarell,Fira Sans,Droid Sans,Helvetica Neue,sans-serif;
+            }
+            .tree {
+                user-select: none;
+		        margin: 0;
+		        padding: 0;
+		    }
+		    
+		    .tree ul {
+		        margin: 0 0 0 1rem;
+		        padding: 0;
+		        list-style-type: none;
+		    }
+		    
+		    .tree li {
+		        margin: 0 0 0 0.3rem;
+		        padding: 0;
+		        list-style-type: none;
+		    }
+		    
+		    .tree a {
+                border: 0px solid blue;
+            }
+            
+            .tree a:hover {
+                -webkit-text-stroke: 1px rgb(136, 138, 133);
+            }
+		    
+		    .tree summary {
+		        border: 0px solid red;
+		    }
+		    
+		    .tree details {
+                border: 0px solid green;
+                width: auto;
+            }
+		</style>
+        <!--# config timefmt="%Y%m%d%H%M%S" -->
+        <script src="/js/gui/UIState.js?<!--# echo var='date_local' -->"></script>
+        <script src="/js/gui/TreeView.js?<!--# echo var='date_local' -->"></script>
+        
+        <div id="treeView">
+        
+        </div>
+        
+        <div id="expected">
+	        <ul class="tree">
+	            <li id="id1">
+	                <details>
+		                <summary><a>Solar system</a></summary>
+			            <ul>
+				            <li id="id2">
+				                <details>
+					                <summary><a>Giant planets</a></summary>
+					                <ul>
+					                    <li id="id3">
+					                        <details>
+					                        <summary><a>Gas giants</a></summary>
+					                        <ul>
+					                            <li id="id3.1"><a>Jupiter</a></li>
+					                            <li id="id3.2"><a>Saturn</a></li>
+					                        </ul>
+					                        </details>
+					                    </li>
+					                    <li id="id4">
+					                        <details>
+					                        <summary><a>Ice giants</a></summary>
+					                        <ul>
+					                            <li id="id4.1"><a>Uranus</a></li>
+					                            <li id="id4.2"><a>Neptune</a></li>
+					                        </ul>
+					                        </details>
+					                    </li>
+					                </ul>
+				                </details>
+				            </li>
+				            <li id="id5">
+			                    <details>
+	                                <summary><a>Small planets</a></summary>
+				                    <ul>
+				                        <li id="id5.1"><a>Earth</a></li>
+				                        <li id="id5.2"><a>Mars</a></li>
+				                    </ul>
+			                    </details>
+			                </li>
+				        </ul>
+			        </details>
+			    </li>
+			</ul>
+        </div>
+    </body>
+</html>

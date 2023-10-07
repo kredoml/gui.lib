@@ -6,9 +6,9 @@ class ConsoleLogger {
 
 class LocalStorage { 
 	
-	constructor(localStorage, uniq) {
+	constructor(wndw, uniq) {
 		try {
-			this.__ls = localStorage.localStorage
+			this.__ls = wndw.localStorage
 			this.__ls.setItem("test", "_")
 			this.__ls.removeItem("test")
 		} catch(e) {
@@ -25,7 +25,11 @@ class LocalStorage {
 	
 	getObj = (key, defaultValue) => this.__appKey(key) in this.__ls ? JSON.parse(this.__ls[this.__appKey(key)]) : defaultValue 
 	
-	clear = () => this.__ls.clear()
+	clear() {
+        Object.keys(localStorage).forEach(k => {
+            if(k.startsWith(this.__uniq)) this.__ls.removeItem(k)
+        })
+    }
 	
 	__appKey = (key) => this.__uniq + "." + key
 }
