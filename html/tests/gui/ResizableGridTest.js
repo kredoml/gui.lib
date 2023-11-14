@@ -1,4 +1,8 @@
 
+import { UIState } from '/js/gui/UIState.js'
+import { ResizableGrid } from '/js/gui/ResizableGrid.js'
+import { InJectX, Integration, Mouse } from '/js/injectx/InJectX.js'
+
 function initGrid() {
     let stub = window.document.getElementById("stub").innerHTML
     window.document.getElementById("test").innerHTML = stub.replaceAll('$', '')

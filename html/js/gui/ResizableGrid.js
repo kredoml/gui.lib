@@ -55,7 +55,7 @@
 
 */
 
-class ResizableGrid {
+export class ResizableGrid {
     constructor(doc, id, state) {
         this.__id = id
         this.__state = state

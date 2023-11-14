@@ -1,4 +1,8 @@
 
+import { UIState } from '/js/gui/UIState.js'
+import { TreeView } from '/js/gui/TreeView.js'
+import { InJectX, Integration, Mouse } from '/js/injectx/InJectX.js'
+
 InJectX.add(Integration.test("TreeView.generate", "/tests/gui/resources/tree.view.html", (assert) => {
     let treeViewGenerateData = {
         "id": "id1",

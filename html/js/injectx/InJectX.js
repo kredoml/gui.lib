@@ -1,7 +1,21 @@
 
-window.onload = () => Suite.fromUrl(window.document.URL, new ResultsForm(window)).run()
+import { FileSystem, Path } from '/js/utils/FileSystem.js'
 
-runInjectedTest = (suiteScript, testName, callback) => Suite.runInjectedTest(suiteScript, testName, callback)
+InJectXInit()
+window.runTestsFromUrl = async function (){
+    InJectX.setUp(() => Suite.fromUrl(window.document.URL, window).run())
+}
+
+window.runTestsFromDir = async function() {
+    let fs = new FileSystem(window, window.document.URL)
+    let suite = await Suite.fromDir(await fs.dir(new Path()), window)
+    InJectX.setUp(() => suite.run())
+}
+
+function InJectXInit() {
+    window.onload = () => Suite.fromUrl(window.document.URL, window).run()
+    window.runInjectedTest = (suiteScript, testName, callback) => Suite.runInjectedTest(suiteScript, testName, callback)
+}
 
 class InJectXError extends Error {
     constructor(message) {
@@ -17,17 +31,20 @@ class AssertionError extends Error {
     }
 }
 
-class InJectX {
+export class InJectX {
     static __storage = {}
     static __imports = []
+    static setUp = async function(runTests) {runTests()}
+
     static add(testObj) {
         let script = Utils.getCallerFile()
         if(!(script in InJectX.__storage)) InJectX.__storage[script] = {}
         InJectX.__storage[script][testObj.name] = testObj
     }
     static getTests(script, testNames) {
+        if(Object.keys(InJectX.__storage).length == 0) return []
         return testNames.length == 0
-            ? Object.values(InJectX.__storage[script])
+            ? Object.values(InJectX.__storage[script] || {})
             : testNames.map(name =>  InJectX.__storage[script][name])
     }
     static getTest(script, testName) { return InJectX.__storage[script][testName] }
@@ -35,29 +52,43 @@ class InJectX {
     static getImports() { return InJectX.__imports }
 }
 
-class Suite {
+export class Suite {
     constructor(items, resultForm) {
         this.items = items
         this.resultForm = resultForm
     }
     
     run() {
+        this.resultForm._init()
         this.items.forEach(item => {
             let script = item.script
             let testNames = item.testNames
             this.resultForm.addSuite(script)
             Utils.injectScript(window, script,
                 ok  => {
-                    let setResult = (name, res, err) => this.resultForm.setResult(script, name, res, err)
-                    InJectX.getTests(script, testNames).map(test => test.run(setResult, script))
+                    try {
+                        let setResult = (name, res, err) => this.resultForm.setResult(script, name, res, err)
+                        InJectX.getTests(script, testNames).map(test => test.run(setResult, script))
+                    } catch(e) {
+                        console.log(e)
+                        this.__errMsg(script, `${e}`)
+                    }
                 },
-                err => {
-                    const errMsg = `Can't import ${script}`
-                    this.resultForm.setResult(script, "exception", false, errMsg)
-                    throw new InJectXError(errMsg)
-                }
+                err => this.__errMsg(script, `Can't import ${script}`)
             )
         })
+    }
+    
+    __errMsg(script, errMsg) {
+        this.resultForm.setResult(script, "exception", false, errMsg)
+        throw new InJectXError(errMsg)
+    }
+    
+    __interceptError(errorMsg, url, lineNumber) {
+        let script = new URL(url).pathname
+        if(!(script.endsWith('Test.js') || script.endsWith('Tests.js'))) return false
+        this.__errMsg(script, `${errorMsg}`)
+        return false
     }
     
     static runInjectedTest(suiteScript, testName, callback) {
@@ -67,17 +98,32 @@ class Suite {
         )
     }
     
-    static fromUrl(url, resultForm) {
+    static fromUrl(url, wndw) {
         let items = []
         let urlParts = url.split("#")
-        if(urlParts.length < 2) throw new InJectXError(`Can't find any params in ${url}`)
+        if(urlParts.length < 2) return new StubSuite()
         let anchor = urlParts[1]
         if(anchor === "InJectX") return new StubSuite()
         anchor.split(";").forEach(item => {
             let params = item.split(":");
             items.push({script: params[0], testNames: params.length == 2 ? params[1].split(",") : []})
         })
-        return new Suite(items, resultForm)
+        return Suite.__createSuite(items, wndw)
+    }
+    
+    static async fromDir(dir, wndw) {
+        let items = []
+        let ls = await dir.listRecursive()
+        await ls.go(file => {
+            if(file.name().endsWith('Test.js') || file.name().endsWith('Tests.js')) items.push({script: '/' + file.uniq(), testNames: []})
+        }, _ => {})
+        return Suite.__createSuite(items, wndw)
+    }
+    
+    static __createSuite(items, wndw) {
+        let suite = new Suite(items, new ResultsForm(wndw))
+        wndw.onerror = (errorMsg, url, lineNumber) => suite.__interceptError(errorMsg, url, lineNumber)
+        return suite
     }
 }
 
@@ -87,11 +133,15 @@ class StubSuite extends Suite {
 
 class ResultsForm {
   
-    static __form = '<details id="{suite}" close><summary><span id="{suite}.res">OK</span> | {suite}</summary><pre id="{suite}.InJectX_ERR" style="color: red;"></pre>\
+    static __form = '<details id="{suite}" close><summary><span id="{suite}.res">__</span> | {suite}</summary><pre id="{suite}.InJectX_ERR" style="color: red;"></pre>\
             <pre id="{suite}.InJectX_OK" style="color: green;"></pre></details>';
         
     constructor(wndw) {
         this.__wndw = wndw
+    }
+    
+    _init() {
+        this.__wndw.document.getElementById("InJectXResults").innerHTML = ''
     }
     
     addSuite(suite) {
@@ -99,6 +149,7 @@ class ResultsForm {
     }
     
     ok(suite, name) {
+        this.__wndw.document.getElementById(suite +".res").innerHTML = "OK"
         this.__wndw.document.getElementById(suite + ".InJectX_OK").innerHTML += "OK\t" + name + "\n"
     }
     
@@ -115,20 +166,12 @@ class ResultsForm {
     }
 }
 
-class Utils {
-    
-    static getScriptPathByName(wndw, scriptName) {
-        let allFoundScripts = []
-        for(let el of Array.from(wndw.document.getElementsByTagName("script"))) {
-            if(el.src.indexOf(scriptName) >= 0) return el.src.split("?")[0]
-            allFoundScripts.push(el.src)
-        }
-        throw new InJectXError(`Can't found script ${scriptName} in ${allFoundScripts}`)
-    }
+export class Utils {
     
     static injectScript(wndw, scriptUrl, onLoad, onError) {
         let script = wndw.document.createElement("script")
-        script.setAttribute("src", scriptUrl + "?" + Date.now())
+        script.setAttribute("src", scriptUrl)
+        script.setAttribute("type", "module")
         script.addEventListener("load", onLoad)
         script.addEventListener("error", onError)
         wndw.document.body.appendChild(script)
@@ -160,7 +203,7 @@ class Test {
     }
 }
 
-class Unit extends Test {
+export class Unit extends Test {
     constructor(name, body) {
         super(name, body)
     }
@@ -179,7 +222,7 @@ class Unit extends Test {
     }
 }
 
-class Integration extends Unit {
+export class Integration extends Unit {
     constructor(name, url, body) {
         super(name, body)
         this.__url = url
@@ -190,7 +233,7 @@ class Integration extends Unit {
     run(callback, suiteScript) {
         let wndw = window.open(this.__url + "#InJectX")
         wndw.addEventListener("load", () => {
-            Utils.injectScript(wndw, Utils.getScriptPathByName(window, "InJectX.js"),
+            Utils.injectScript(wndw, import.meta.url,
                 (ok) => {
                     wndw.runInjectedTest(suiteScript, this.name, (name, result, error) => {
                         wndw.document.title = wndw.document.title + " [" + this.name + "]"
@@ -214,6 +257,8 @@ class Assert {
     constructor() {
         this._assertCount = 0
     }
+    
+    equalsArray(actual, expected) {}
     
     equals(actual, expected) { this.__assertion(actual.toString() !== expected.toString(), actual, expected) }
     
@@ -285,7 +330,7 @@ class Calls {
     }
 }
 
-class Position {
+export class Position {
     constructor(x, y) {
         this.x = x
         this.y = y
@@ -322,7 +367,8 @@ class Position {
         return new Position(this.x, this.y)
     }
 }
-class Mouse {
+
+export class Mouse {
     
     constructor(element) {
         this.__el = element
@@ -359,73 +405,4 @@ class Mouse {
         this.__el.click()
     }
 }
-
-
-/*
-
-class AsyncUnit extends Unit {
-    constructor(name, body) {
-        super(name, body)
-    }
-    
-    static test(name, body) { return new AsyncUnit(name, body) }
-    
-    async run(callback) {
-        let assert = new AsyncAssert()
-        try {
-            await this.body(assert)
-            await assert._wait()
-            assert._checkAsserts()
-            assert._checkComplete()
-            callback(this.name, true, "")
-        } catch (err) {
-            callback(this.name, false, err.stack)
-        }
-    }
-}
-
-class AsyncAssert extends Assert {
-    
-    constructor() {
-        super()
-        this.__delay = 0
-        this.__numberOfCompleted = 0
-        this.__reallyCompleted = 0
-        this.__resolve = () => {}
-        this.__reject = () => {}
-    }
-    
-    timeout(delay) { this.__delay = delay }
-    
-    numberOfCompleted(number) {
-        this.__numberOfCompleted = number
-        this.__promise = new Promise((resolve, reject) => {
-            this.__resolve = resolve
-            this.__reject = reject
-            setTimeout(() => resolve(), this.__delay)
-        })
-    }
-    
-    complete() {
-        this.ok()
-        this.__reallyCompleted += 1
-        if(this.__numberOfCompleted == this.__reallyCompleted) this.__resolve()
-    }
-    
-    _wait() { return this.__promise }
-    
-    _checkComplete() {
-        if(this.__numberOfCompleted > this.__reallyCompleted) {
-            this._err(`Expected ${this.__numberOfCompleted} calls "complete" but found only ${this.__reallyCompleted}`)
-        }
-    }
-    
-    _err(msg) {
-        let err = new AssertionError(msg)
-        this.__reject(err)
-        throw err
-    }
-}
-
-*/
 

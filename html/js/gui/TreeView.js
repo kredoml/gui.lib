@@ -1,5 +1,5 @@
 
-class TreeView {
+export class TreeView {
     
     constructor(doc, id, data, state) {
         this.__doc = doc

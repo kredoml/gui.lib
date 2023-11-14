@@ -10,7 +10,7 @@ class _Dict {
     }
 }
 
-class UIState {
+export class UIState {
     
     constructor(storage) {
         this.__storage = storage

@@ -1,4 +1,6 @@
 
+import { InJectX, Unit } from '/js/injectx/InJectX.js'
+
 InJectX.add(Unit.test("Unit.equals", (assert) => {
     assert.equals(123, 123)
     assert.equals("abc", "abc")
@@ -54,3 +56,13 @@ InJectX.add(Unit.test("Unit.fail", (assert) => {
 InJectX.add(Unit.test("Unit.ok", (assert) => {
     assert.ok()
 }))
+
+InJectX.add(Unit.test("AsyncUnit.complete", async (assert) => {
+    let calls = assert.calls(1, 1000)
+    setTimeout(() => calls.plusOne(), 100)
+    assert.true(true)
+    await calls.forAllEvents()
+}))
+
+
+

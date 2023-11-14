@@ -3,10 +3,11 @@
     <head>
         <meta charset="utf-8">
         <title>InJect tests</title>
-        <!--# config timefmt="%Y%m%d%H%M%S" -->
-        <script src="/js/injectx/InJectX.js?<!--# echo var='date_local' -->"></script>
+        <script src="/js/injectx/InJectX.js" type="module"></script>
     </head>
-    <body>
+    <body>Run tests from: 
+        <button onclick="runTestsFromUrl()">url</button>
+        <button onclick="runTestsFromDir()">dir</button>
         <div id="InJectXResults"></div>
     </body>
 </html>

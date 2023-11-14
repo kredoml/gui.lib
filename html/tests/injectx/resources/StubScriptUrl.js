@@ -1,4 +1,2 @@
 
-class StubScriptUrl {
-    static testCall = () => true
-}
+window.testCall = () => true

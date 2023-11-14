@@ -1,5 +1,5 @@
 
-class InteractiveGraph {
+export class InteractiveGraph {
     
     constructor(doc, id, treeData, state) {
         this.nodeTypes = {"problem": 8, "trouble": 6, "shot": 4}

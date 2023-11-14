@@ -1,5 +1,5 @@
 
-class ConsoleLogger {
+export class ConsoleLogger {
 	static info(message) { console.log(message) }
 	static err(error) { console.error(error) }
 }
@@ -118,7 +118,7 @@ class JsLoaderDebug extends JsLoader {
     }
 }
 
-class WebApp {
+export class WebApp {
     constructor(window, activityContainerId, logger, debugMode) {
         this.window = window
         this.localStorage = new LocalStorage(window, activityContainerId)
@@ -158,7 +158,7 @@ class WebApp {
 	}
 }
 
-class Activity {
+export class Activity {
 	
 	constructor(application) {
 		this.app = application
